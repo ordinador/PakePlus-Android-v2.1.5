@@ -3,988 +3,384 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>资产盘点系统</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <!-- QuaggaJS for barcode scanning -->
-    <script src="https://unpkg.com/@ericblade/quagga2@1.0.6/dist/quagga.min.js"></script>
-    <!-- SheetJS for Excel handling -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#1e40af',
-                        secondary: '#3b82f6',
-                        success: '#10b981',
-                        warning: '#f59e0b',
-                        danger: '#ef4444',
-                        light: '#f3f4f6',
-                        dark: '#1f2937'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
+    <title>极简相机</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    </script>
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .content-auto {
-                content-visibility: auto;
-            }
-            .scan-area {
-                width: 100%;
-                height: 60vh;
-                position: relative;
-            }
-            .scan-line {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 2px;
-                background-color: #3b82f6;
-                animation: scan 2s linear infinite;
-            }
-            @keyframes scan {
-                0% { top: 0; }
-                50% { top: 100%; }
-                100% { top: 0; }
-            }
-            .scan-frame {
-                position: absolute;
-                top: 25%;
-                left: 25%;
-                width: 50%;
-                height: 50%;
-                border: 2px solid #3b82f6;
-                border-radius: 8px;
-            }
-            .tab-active {
-                color: #3b82f6;
-                border-bottom: 2px solid #3b82f6;
-            }
-            .fade-in {
-                animation: fadeIn 0.3s ease-in-out;
-            }
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            .slide-in {
-                animation: slideIn 0.3s ease-in-out;
-            }
-            @keyframes slideIn {
-                from { transform: translateY(20px); opacity: 0; }
-                to { transform: translateY(0); opacity: 1; }
-            }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        .btn:active {
+            background: rgba(255,255,255,0.3);
+            transform: scale(0.95);
+        }
+        
+        .btn-capture {
+            width: 80px;
+            height: 80px;
+            background: #fff;
+            border: 4px solid #fff;
+        }
+        
+        .btn-capture::before {
+            content: '';
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid #000;
+            display: block;
+        }
+        
+        .preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .preview img {
+            max-width: 90%;
+            max-height: 80%;
+            object-fit: contain;
+        }
+        
+        .preview-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+        }
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .message.show {
+            opacity: 1;
+        }
+        
+        .debug {
+            position: fixed;
+            top: 60px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            font-size: 10px;
+            font-family: monospace;
+            max-height: 100px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans">
-    <!-- App Container -->
-    <div class="min-h-screen flex flex-col">
-        <!-- Header -->
-        <header class="bg-white shadow-sm">
-            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-                <div class="flex items-center">
-                    <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/c086e3c753fe4f49a9c7ad285407fd67~tplv-a9rns2rl98-image.image?rcl=2025123015253954AF7A353699100C6D01&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1769671576&x-signature=4LdMKkfkB4Wdc1Rw377xMe6P3mY%3D" alt="资产盘点系统" class="h-10 w-10">
-                    <h1 class="ml-2 text-xl font-bold text-primary">资产盘点系统</h1>
-                </div>
-                <div id="scanStatus" class="hidden">
-                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">扫描中</span>
-                </div>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="flex-grow container mx-auto px-4 py-6">
-            <!-- Tab Navigation -->
-            <div class="flex border-b border-gray-200 mb-6">
-                <button onclick="switchTab('scan')" id="tab-scan" class="tab-active flex-1 py-3 text-center font-medium text-sm">
-                    <i class="fa fa-qrcode mr-1"></i>扫码
-                </button>
-                <button onclick="switchTab('data')" id="tab-data" class="flex-1 py-3 text-center font-medium text-sm text-gray-500">
-                    <i class="fa fa-table mr-1"></i>数据管理
-                </button>
-                <button onclick="switchTab('export')" id="tab-export" class="flex-1 py-3 text-center font-medium text-sm text-gray-500">
-                    <i class="fa fa-download mr-1"></i>导出分享
-                </button>
-                <button onclick="switchTab('settings')" id="tab-settings" class="flex-1 py-3 text-center font-medium text-sm text-gray-500">
-                    <i class="fa fa-cog mr-1"></i>设置
-                </button>
-            </div>
-
-            <!-- Tab Content -->
-            <div id="content-scan">
-                <!-- Scan Area -->
-                <div class="scan-area bg-gray-900 rounded-lg overflow-hidden mb-6" style="height: 40vh;">
-                    <div id="interactive" class="viewport"></div>
-                    <div class="scan-line"></div>
-                    <div class="scan-frame"></div>
-                </div>
-
-                <!-- Scan Controls -->
-                <div class="flex justify-center space-x-4 mb-6">
-                    <button onclick="startScanner()" class="px-6 py-3 bg-primary text-white rounded-lg shadow-md hover:bg-primary/90 flex items-center">
-                        <i class="fa fa-play mr-2"></i>开始扫描
-                    </button>
-                    <button onclick="stopScanner()" disabled class="px-6 py-3 bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 flex items-center">
-                        <i class="fa fa-stop mr-2"></i>停止扫描
-                    </button>
-                    <button onclick="toggleFlash()" class="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg shadow-md hover:bg-gray-300">
-                        <i class="fa fa-bolt"></i>
-                    </button>
-                </div>
-
-                <!-- Scan Result -->
-                <div id="scanResult" class="bg-white rounded-lg shadow-md p-4 mb-6 hidden">
-                    <h3 class="text-lg font-semibold mb-2">扫描结果</h3>
-                    <div class="flex items-center">
-                        <div class="bg-blue-100 p-3 rounded-lg mr-4">
-                            <i class="fa fa-barcode text-2xl text-primary"></i>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500">资产编号</p>
-                            <p id="assetId" class="text-xl font-bold"></p>
-                        </div>
-                    </div>
-                    <div id="matchResult" class="mt-4 p-3 rounded-lg hidden"></div>
-                </div>
-
-                <!-- Scan History -->
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <h3 class="text-lg font-semibold mb-3 flex justify-between items-center">
-                        <span>扫描历史</span>
-                        <span id="historyCount" class="text-sm text-gray-500">0 条记录</span>
-                    </h3>
-                    <div id="scanHistory" class="max-h-60 overflow-y-auto">
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fa fa-history text-3xl mb-2"></i>
-                            <p>暂无扫描记录</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="content-data" class="hidden">
-                <!-- Data Management -->
-                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
-                    <h3 class="text-lg font-semibold mb-3">基础数据管理</h3>
-                    <div class="flex flex-col space-y-4">
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                            <i class="fa fa-upload text-3xl text-gray-400 mb-2"></i>
-                            <p class="text-gray-500 mb-4">上传包含资产信息的Excel文件</p>
-                            <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden" onchange="handleFileImport(event)">
-                            <button onclick="document.getElementById('fileInput').click()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90">
-                                <i class="fa fa-folder-open mr-2"></i>选择文件
-                            </button>
-                        </div>
-                        <div id="dataStats" class="hidden">
-                            <div class="grid grid-cols-3 gap-4 text-center">
-                                <div class="bg-blue-50 p-3 rounded-lg">
-                                    <p class="text-sm text-gray-500">总资产数</p>
-                                    <p id="totalAssets" class="text-xl font-bold text-primary">0</p>
-                                </div>
-                                <div class="bg-green-50 p-3 rounded-lg">
-                                    <p class="text-sm text-gray-500">已盘点</p>
-                                    <p id="scannedAssets" class="text-xl font-bold text-success">0</p>
-                                </div>
-                                <div class="bg-yellow-50 p-3 rounded-lg">
-                                    <p class="text-sm text-gray-500">未盘点</p>
-                                    <p id="remainingAssets" class="text-xl font-bold text-warning">0</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Asset List -->
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <h3 class="text-lg font-semibold">资产列表</h3>
-                        <div class="flex space-x-2">
-                            <input type="text" id="searchInput" placeholder="搜索资产编号" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
-                            <button onclick="searchAssets()" class="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">
-                                <i class="fa fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="assetList" class="max-h-96 overflow-y-auto">
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fa fa-file-excel-o text-3xl mb-2"></i>
-                            <p>请先上传资产数据文件</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="content-export" class="hidden">
-                <!-- Export Options -->
-                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">导出盘点结果</h3>
-                    <div class="flex flex-col space-y-4">
-                        <button onclick="exportToExcel()" class="flex items-center justify-center px-6 py-3 bg-primary text-white rounded-lg shadow-md hover:bg-primary/90">
-                            <i class="fa fa-file-excel-o mr-2"></i>导出为Excel文件
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Export Preview -->
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <h3 class="text-lg font-semibold mb-3">导出预览</h3>
-                    <div id="exportPreview" class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead>
-                                <tr>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">资产编号</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">盘点状态</th>
-                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">扫描时间</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200" id="previewTable">
-                                <tr>
-                                    <td colspan="3" class="px-4 py-4 text-center text-gray-500">暂无数据</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div id="content-settings" class="hidden">
-                <!-- Settings -->
-                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4">系统设置</h3>
-                    <div class="space-y-6">
-                        <div>
-                            <h4 class="text-md font-medium mb-2">扫描设置</h4>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <label class="text-sm text-gray-600">启用连续扫描</label>
-                                    <label class="inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="continuousScan" class="sr-only peer">
-                                        <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <label class="text-sm text-gray-600">自动对焦</label>
-                                    <label class="inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="autoFocus" class="sr-only peer" checked>
-                                        <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 class="text-md font-medium mb-2">模板下载</h4>
-                            <p class="text-sm text-gray-600 mb-3">下载资产盘点Excel模板，按照模板格式填写资产信息</p>
-                            <button onclick="downloadTemplate()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center">
-                                <i class="fa fa-download mr-2"></i>下载模板
-                            </button>
-                        </div>
-                        <div>
-                            <h4 class="text-md font-medium mb-2">关于系统</h4>
-                            <div class="text-sm text-gray-600 space-y-1">
-                                <p>版本: 1.0.0</p>
-                                <p>开发者: 资产盘点系统团队</p>
-                                <p>联系邮箱: support@asset-system.com</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Toast Notification -->
-        <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg hidden">
-            <div class="flex items-center">
-                <i id="toastIcon" class="mr-2"></i>
-                <span id="toastMessage"></span>
+<body>
+    <div class="camera-container">
+        <video id="video" autoplay playsinline></video>
+        
+        <div class="controls">
+            <button id="toggleCamera" class="btn">🔄</button>
+            <button id="capture" class="btn btn-capture"></button>
+            <button id="toggleFlash" class="btn">⚡</button>
+        </div>
+        
+        <div class="preview" id="preview">
+            <img id="previewImage" src="" alt="预览">
+            <div class="preview-controls">
+                <button id="retake" class="btn">↻</button>
+                <button id="save" class="btn">✓</button>
             </div>
         </div>
     </div>
+    
+    <div class="message" id="message"></div>
+    <div class="debug" id="debug"></div>
 
     <script>
-        // Global variables
-        let inventoryData = [];
-        let scanHistory = [];
-        let isScanning = false;
-        let isFlashOn = false;
-        let currentStream = null;
-        let workbook = null;
-        let activeTab = 'scan';
-
-        // DOM Elements
-        const tabContents = {
-            scan: document.getElementById('content-scan'),
-            data: document.getElementById('content-data'),
-            export: document.getElementById('content-export'),
-            settings: document.getElementById('content-settings')
-        };
-
-        // Tab switching
-        function switchTab(tabName) {
-            console.log('Switching to tab:', tabName);
-            
-            // Get all tab buttons
-            const tabButtons = {
-                scan: document.getElementById('tab-scan'),
-                data: document.getElementById('tab-data'),
-                export: document.getElementById('tab-export'),
-                settings: document.getElementById('tab-settings')
-            };
-            
-            // Update tab button styles
-            Object.keys(tabButtons).forEach(tab => {
-                if (tab === tabName) {
-                    tabButtons[tab].classList.add('tab-active');
-                    tabButtons[tab].classList.remove('text-gray-500');
-                } else {
-                    tabButtons[tab].classList.remove('tab-active');
-                    tabButtons[tab].classList.add('text-gray-500');
-                }
-            });
-            
-            // Hide all tab contents
-            Object.values(tabContents).forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            // Show selected tab content
-            tabContents[tabName].classList.remove('hidden');
-            
-            // Update active tab
-            activeTab = tabName;
-            
-            // Stop scanning if switching away from scan tab
-            if (tabName !== 'scan' && isScanning) {
-                stopScanner();
-            }
-            
-            // Update export preview when switching to export tab
-            if (tabName === 'export') {
-                updateExportPreview();
-            }
-        }
-
-        // Show toast notification
-        function showToast(type, message) {
-            const toast = document.getElementById('toast');
-            const toastIcon = document.getElementById('toastIcon');
-            const toastMessage = document.getElementById('toastMessage');
-            
-            // Set toast type
-            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg';
-            
-            if (type === 'success') {
-                toast.classList.add('bg-green-100', 'text-green-800');
-                toastIcon.className = 'fa fa-check-circle mr-2';
-            } else if (type === 'error') {
-                toast.classList.add('bg-red-100', 'text-red-800');
-                toastIcon.className = 'fa fa-exclamation-circle mr-2';
-            } else if (type === 'warning') {
-                toast.classList.add('bg-yellow-100', 'text-yellow-800');
-                toastIcon.className = 'fa fa-exclamation-triangle mr-2';
-            } else {
-                toast.classList.add('bg-blue-100', 'text-blue-800');
-                toastIcon.className = 'fa fa-info-circle mr-2';
-            }
-            
-            // Set message
-            toastMessage.textContent = message;
-            
-            // Show toast
-            toast.classList.remove('hidden');
-            
-            // Hide toast after 3 seconds
+        // 全局变量
+        let stream = null;
+        let camera = 'environment'; // 'user' 前置, 'environment' 后置
+        let flash = false;
+        let capturedImage = null;
+        
+        // DOM元素
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('capture');
+        const toggleCameraBtn = document.getElementById('toggleCamera');
+        const toggleFlashBtn = document.getElementById('toggleFlash');
+        const preview = document.getElementById('preview');
+        const previewImage = document.getElementById('previewImage');
+        const retakeBtn = document.getElementById('retake');
+        const saveBtn = document.getElementById('save');
+        const message = document.getElementById('message');
+        const debug = document.getElementById('debug');
+        
+        // 显示消息
+        function showMessage(text) {
+            message.textContent = text;
+            message.classList.add('show');
             setTimeout(() => {
-                toast.classList.add('hidden');
+                message.classList.remove('show');
             }, 3000);
         }
-
-        // Start scanner
-        function startScanner() {
-            if (isScanning) return;
-            
-            console.log('Starting scanner...');
-            
-            // Request camera access
-            navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: "environment"
-                },
-                audio: false
-            }).then(function(stream) {
-                console.log('Camera access granted');
-                
-                // Save the stream for later use
-                currentStream = stream;
-                
-                try {
-                    // Initialize scanner
-                    Quagga.init({
-                        inputStream: {
-                            type: "LiveStream",
-                            target: document.querySelector('#interactive'),
-                            constraints: {
-                                width: 640,
-                                height: 480,
-                                facingMode: "environment"
-                            }
-                        },
-                        decoder: {
-                            readers: [
-                                "code_128_reader",
-                                "ean_reader",
-                                "ean_8_reader",
-                                "code_39_reader",
-                                "code_39_vin_reader",
-                                "codabar_reader",
-                                "upc_reader",
-                                "upc_e_reader",
-                                "i2of5_reader"
-                            ]
-                        },
-                        locator: {
-                            patchSize: "medium",
-                            halfSample: true
-                        }
-                    }, function(err) {
-                        if (err) {
-                            console.error('Scanner initialization error:', err);
-                            showToast('error', '扫描器初始化失败');
-                            return;
-                        }
-                        
-                        console.log('Scanner initialized successfully');
-                        
-                        // Start scanning
-                        Quagga.start();
-                        isScanning = true;
-                        
-                        // Update UI
-                        document.getElementById('scanStatus').classList.remove('hidden');
-                        
-                        showToast('success', '扫描器已启动');
-                    });
-
-                    // Scanner event handlers
-                    Quagga.onDetected(function(result) {
-                        const code = result.codeResult.code;
-                        console.log('Barcode detected:', code);
-                        
-                        // Handle scan result
-                        handleScanResult(code);
-                        
-                        // Stop scanning if continuous scan is disabled
-                        if (!document.getElementById('continuousScan').checked) {
-                            stopScanner();
-                        }
-                    });
-
-                } catch (error) {
-                    console.error('Error starting scanner:', error);
-                    showToast('error', '启动扫描器失败');
-                    // Clean up stream
-                    stream.getTracks().forEach(track => track.stop());
-                    currentStream = null;
-                }
-            }).catch(function(err) {
-                console.error('Error accessing camera:', err);
-                if (err.name === 'NotAllowedError') {
-                    showToast('error', '摄像头权限被拒绝');
-                } else if (err.name === 'NotFoundError') {
-                    showToast('error', '未检测到摄像头');
-                } else {
-                    showToast('error', '无法访问摄像头');
-                }
-            });
-        }
-
-        // Stop scanner
-        function stopScanner() {
-            if (!isScanning) return;
-            
-            console.log('Stopping scanner...');
-            
-            try {
-                Quagga.stop();
-                isScanning = false;
-                
-                // Stop the camera stream
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => track.stop());
-                    currentStream = null;
-                }
-                
-                // Update UI
-                document.getElementById('scanStatus').classList.add('hidden');
-                
-                showToast('info', '扫描器已停止');
-            } catch (error) {
-                console.error('Error stopping scanner:', error);
-                showToast('error', '停止扫描器失败');
-            }
-        }
-
-        // Toggle flashlight
-        function toggleFlash() {
-            if (!currentStream) {
-                showToast('warning', '请先启动扫描器');
-                return;
-            }
-            
-            console.log('Toggling flashlight...');
-            
-            const videoTrack = currentStream.getVideoTracks()[0];
-            
-            if (videoTrack) {
-                try {
-                    // Try different flashlight API methods
-                    if (videoTrack.torch !== undefined) {
-                        videoTrack.torch = !isFlashOn;
-                        isFlashOn = videoTrack.torch;
-                        showToast('success', isFlashOn ? '手电筒已开启' : '手电筒已关闭');
-                    } else if (typeof videoTrack.setTorchMode === 'function') {
-                        videoTrack.setTorchMode(!isFlashOn);
-                        isFlashOn = !isFlashOn;
-                        showToast('success', isFlashOn ? '手电筒已开启' : '手电筒已关闭');
-                    } else if (typeof videoTrack.applyConstraints === 'function') {
-                        const constraints = {
-                            advanced: [{ torch: !isFlashOn }]
-                        };
-                        console.log('Applying torch constraints:', constraints);
-                        videoTrack.applyConstraints(constraints).then(() => {
-                            isFlashOn = !isFlashOn;
-                            showToast('success', isFlashOn ? '手电筒已开启' : '手电筒已关闭');
-                        }).catch(err => {
-                            console.error('Error applying torch constraints:', err);
-                            showToast('warning', '手电筒功能可能不被支持');
-                        });
-                    } else {
-                        console.log('Torch API not available');
-                        showToast('warning', '当前设备不支持手电筒功能');
-                    }
-                } catch (error) {
-                    console.error('Error toggling flashlight:', error);
-                    showToast('warning', '手电筒操作失败');
-                }
-            } else {
-                console.log('No video track found');
-                showToast('warning', '无法访问摄像头');
-            }
-        }
-
-        // Handle scan result
-        function handleScanResult(barcode) {
-            console.log('Processing scan result:', barcode);
-            
-            // Show scan result
-            const scanResult = document.getElementById('scanResult');
-            const assetId = document.getElementById('assetId');
-            const matchResult = document.getElementById('matchResult');
-            
-            assetId.textContent = barcode;
-            scanResult.classList.remove('hidden');
-            
-            // Check if asset exists in inventory
-            const asset = inventoryData.find(item => item['资产编号'] === barcode);
-            
-            if (asset) {
-                // Asset found
-                if (asset['盘点状态'] === '已盘点') {
-                    // Already scanned
-                    matchResult.textContent = '已扫码，请扫下一个';
-                    matchResult.className = 'mt-4 p-3 rounded-lg bg-blue-100 text-blue-800';
-                } else {
-                    // First time scanning
-                    matchResult.textContent = `找到资产: ${asset['资产名称'] || '未命名资产'}`;
-                    matchResult.className = 'mt-4 p-3 rounded-lg bg-green-100 text-green-800';
-                    
-                    // Update asset status
-                    asset['盘点状态'] = '已盘点';
-                    asset['扫描时间'] = new Date().toLocaleString('zh-CN');
-                    
-                    // Update UI
-                    updateAssetList();
-                    updateDataStats();
-                }
-                
-                matchResult.classList.remove('hidden');
-                
-                // Add to scan history (only for assets in inventory)
-                addToScanHistory(barcode, 'success');
-                
-            } else {
-                // Asset not found - don't add to history
-                matchResult.textContent = '未找到该资产，请检查资产编号';
-                matchResult.className = 'mt-4 p-3 rounded-lg bg-red-100 text-red-800';
-                matchResult.classList.remove('hidden');
-            }
-        }
-
-        // Add to scan history
-        function addToScanHistory(barcode, status) {
-            const timestamp = new Date().toLocaleString('zh-CN');
-            scanHistory.unshift({ barcode, timestamp, status });
-            
-            // Keep only last 50 records
-            if (scanHistory.length > 50) {
-                scanHistory = scanHistory.slice(0, 50);
-            }
-            
-            // Update scan history UI
-            updateScanHistory();
-        }
-
-        // Update scan history UI
-        function updateScanHistory() {
-            const scanHistoryEl = document.getElementById('scanHistory');
-            const historyCount = document.getElementById('historyCount');
-            
-            historyCount.textContent = `${scanHistory.length} 条记录`;
-            
-            if (scanHistory.length === 0) {
-                scanHistoryEl.innerHTML = `
-                    <div class="text-center text-gray-500 py-8">
-                        <i class="fa fa-history text-3xl mb-2"></i>
-                        <p>暂无扫描记录</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const historyHTML = scanHistory.map(record => `
-                <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-b-0">
-                    <div class="flex items-center">
-                        <i class="fa fa-${record.status === 'success' ? 'check-circle text-green-500' : 'times-circle text-red-500'} mr-2"></i>
-                        <span class="text-sm">${record.barcode}</span>
-                    </div>
-                    <span class="text-xs text-gray-500">${record.timestamp}</span>
-                </div>
-            `).join('');
-            
-            scanHistoryEl.innerHTML = historyHTML;
-        }
-
-        // Handle file import
-        function handleFileImport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            console.log('Importing file:', file.name);
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    workbook = XLSX.read(data, { type: 'array' });
-                    
-                    // Get first sheet
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
-                    
-                    // Convert to JSON
-                    inventoryData = XLSX.utils.sheet_to_json(worksheet);
-                    
-                    console.log('Imported data:', inventoryData);
-                    
-                    if (inventoryData.length === 0) {
-                        showToast('warning', '文件中没有找到数据');
-                        return;
-                    }
-                    
-                    // Validate data structure
-                    if (!inventoryData[0]['资产编号']) {
-                        showToast('error', '文件格式不正确，请确保包含"资产编号"列');
-                        return;
-                    }
-                    
-                    // Add status columns if not exists
-                    inventoryData.forEach(item => {
-                        if (!item['盘点状态']) item['盘点状态'] = '';
-                        if (!item['扫描时间']) item['扫描时间'] = '';
-                    });
-                    
-                    // Update UI
-                    updateAssetList();
-                    updateDataStats();
-                    document.getElementById('dataStats').classList.remove('hidden');
-                    
-                    showToast('success', `成功导入 ${inventoryData.length} 条资产数据`);
-                    
-                } catch (error) {
-                    console.error('Error importing file:', error);
-                    showToast('error', '文件导入失败: ' + error.message);
-                }
-            };
-            
-            reader.onerror = function(error) {
-                console.error('File reader error:', error);
-                showToast('error', '文件读取失败');
-            };
-            
-            reader.readAsArrayBuffer(file);
-        }
-
-        // Update asset list
-        function updateAssetList() {
-            const assetList = document.getElementById('assetList');
-            
-            if (inventoryData.length === 0) {
-                assetList.innerHTML = `
-                    <div class="text-center text-gray-500 py-8">
-                        <i class="fa fa-file-excel-o text-3xl mb-2"></i>
-                        <p>请先上传资产数据文件</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Sort assets: 未盘点的排在前，已盘点的排在后
-            const sortedData = [...inventoryData].sort((a, b) => {
-                if (a['盘点状态'] === '已盘点' && b['盘点状态'] !== '已盘点') return 1;
-                if (a['盘点状态'] !== '已盘点' && b['盘点状态'] === '已盘点') return -1;
-                return 0;
-            });
-            
-            const listHTML = sortedData.map(asset => `
-                <div class="p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h4 class="font-medium">${asset['资产编号']}</h4>
-                            <p class="text-sm text-gray-600">${asset['资产名称'] || '未命名资产'}</p>
-                        </div>
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            asset['盘点状态'] === '已盘点' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                        }">${asset['盘点状态'] || '未盘点'}</span>
-                    </div>
-                    ${asset['扫描时间'] ? `<p class="text-xs text-gray-500 mt-1">扫描时间: ${asset['扫描时间']}</p>` : ''}
-                </div>
-            `).join('');
-            
-            assetList.innerHTML = listHTML;
-        }
-
-        // Update data statistics
-        function updateDataStats() {
-            const totalAssets = document.getElementById('totalAssets');
-            const scannedAssets = document.getElementById('scannedAssets');
-            const remainingAssets = document.getElementById('remainingAssets');
-            
-            const total = inventoryData.length;
-            const scanned = inventoryData.filter(item => item['盘点状态'] === '已盘点').length;
-            const remaining = total - scanned;
-            
-            totalAssets.textContent = total;
-            scannedAssets.textContent = scanned;
-            remainingAssets.textContent = remaining;
-        }
-
-        // Search assets
-        function searchAssets() {
-            const searchTerm = document.getElementById('searchInput').value.trim();
-            console.log('Searching for:', searchTerm);
-            
-            if (!searchTerm) {
-                updateAssetList();
-                return;
-            }
-            
-            const filteredData = inventoryData.filter(asset => 
-                asset['资产编号'].toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (asset['资产名称'] && asset['资产名称'].toLowerCase().includes(searchTerm.toLowerCase()))
-            );
-            
-            const assetList = document.getElementById('assetList');
-            
-            if (filteredData.length === 0) {
-                assetList.innerHTML = `
-                    <div class="text-center text-gray-500 py-8">
-                        <i class="fa fa-search text-3xl mb-2"></i>
-                        <p>未找到匹配的资产</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const listHTML = filteredData.map(asset => `
-                <div class="p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h4 class="font-medium">${asset['资产编号']}</h4>
-                            <p class="text-sm text-gray-600">${asset['资产名称'] || '未命名资产'}</p>
-                        </div>
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            asset['盘点状态'] === '已盘点' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                        }">${asset['盘点状态'] || '未盘点'}</span>
-                    </div>
-                    ${asset['扫描时间'] ? `<p class="text-xs text-gray-500 mt-1">扫描时间: ${asset['扫描时间']}</p>` : ''}
-                </div>
-            `).join('');
-            
-            assetList.innerHTML = listHTML;
-        }
-
-        // Export to Excel
-        function exportToExcel() {
-            if (inventoryData.length === 0) {
-                showToast('warning', '没有数据可以导出');
-                return;
-            }
-            
-            console.log('Exporting data to Excel...');
-            
-            try {
-                // Create workbook
-                const exportWorkbook = XLSX.utils.book_new();
-                
-                // Create worksheet
-                const exportWorksheet = XLSX.utils.json_to_sheet(inventoryData);
-                
-                // Add worksheet to workbook
-                XLSX.utils.book_append_sheet(exportWorkbook, exportWorksheet, '资产盘点结果');
-                
-                // Generate filename
-                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = `资产盘点结果_${timestamp}.xlsx`;
-                
-                // Download file
-                XLSX.writeFile(exportWorkbook, filename);
-                
-                showToast('success', '导出成功');
-            } catch (error) {
-                console.error('Export error:', error);
-                showToast('error', '导出失败: ' + error.message);
-            }
-        }
-
-
         
-        // Download file (final fallback)
-        function downloadFile(fileUrl, filename) {
-            console.log('Downloading file...');
-            
-            const a = document.createElement('a');
-            a.href = fileUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            showToast('success', `文件已下载: ${filename}`);
+        // 调试日志
+        function log(text) {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = `[${time}] ${text}\n`;
+            debug.textContent += logEntry;
+            debug.scrollTop = debug.scrollHeight;
+            console.log(text);
         }
-
-        // Copy to clipboard
-        function copyToClipboard(text) {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text).catch(err => {
-                    console.error('Clipboard error:', err);
-                });
-            } else {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-            }
-        }
-
-        // Download template
-        function downloadTemplate() {
-            console.log('Downloading template...');
+        
+        // 启动摄像头
+        async function startCamera() {
+            log('开始启动摄像头...');
             
             try {
-                // Create template data
-                const templateData = [
-                    ['资产编号', '资产名称', '盘点状态', '扫描时间'],
-                    ['ASSET001', '办公电脑', '', ''],
-                    ['ASSET002', '显示器', '', ''],
-                    ['ASSET003', '打印机', '', '']
-                ];
+                // 停止现有流
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
                 
-                // Create workbook and worksheet
-                const templateWorkbook = XLSX.utils.book_new();
-                const templateWorksheet = XLSX.utils.aoa_to_sheet(templateData);
+                const constraints = {
+                    video: { facingMode: camera },
+                    audio: false
+                };
                 
-                // Add worksheet to workbook
-                XLSX.utils.book_append_sheet(templateWorkbook, templateWorksheet, '资产盘点模板');
+                log(`请求摄像头: ${camera}`);
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
                 
-                // Generate Excel file and download
-                XLSX.writeFile(templateWorkbook, '资产盘点模板.xlsx');
+                showMessage('摄像头启动成功');
+                log('摄像头启动成功');
                 
-                showToast('success', '模板已下载');
             } catch (error) {
-                console.error('Template download error:', error);
-                showToast('error', '模板下载失败: ' + error.message);
+                log('摄像头错误: ' + error.message);
+                showMessage('无法访问摄像头: ' + error.message);
             }
         }
-
-        // Update export preview
-        function updateExportPreview() {
-            const previewTable = document.getElementById('previewTable');
+        
+        // 拍照
+        function capture() {
+            log('拍照按钮点击');
             
-            if (inventoryData.length === 0) {
-                previewTable.innerHTML = `
-                    <tr>
-                        <td colspan="3" class="px-4 py-4 text-center text-gray-500">暂无数据</td>
-                    </tr>
-                `;
+            if (!stream) {
+                showMessage('摄像头未启动');
                 return;
             }
             
-            // Show first 10 records for preview
-            const previewData = inventoryData.slice(0, 10);
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
             
-            const tableHTML = previewData.map(asset => `
-                <tr class="${asset['盘点状态'] === '已盘点' ? 'bg-green-50' : ''}">
-                    <td class="px-4 py-2 border-b border-gray-200">${asset['资产编号']}</td>
-                    <td class="px-4 py-2 border-b border-gray-200">
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                            asset['盘点状态'] === '已盘点' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                        }">${asset['盘点状态'] || '未盘点'}</span>
-                    </td>
-                    <td class="px-4 py-2 border-b border-gray-200 text-sm">${asset['扫描时间'] || '-'}</td>
-                </tr>
-            `).join('');
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            previewTable.innerHTML = tableHTML;
+            capturedImage = canvas.toDataURL('image/jpeg');
+            log('照片已捕获');
+            
+            // 显示预览
+            previewImage.src = capturedImage;
+            preview.style.display = 'flex';
+            showMessage('点击保存或重拍');
         }
-
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Asset Inventory System initialized');
-            showToast('success', '资产盘点系统已就绪');
-        });
-
-        // Handle page visibility change
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden && isScanning) {
-                stopScanner();
+        
+        // 切换摄像头
+        async function toggleCamera() {
+            log('切换摄像头按钮点击');
+            
+            camera = camera === 'user' ? 'environment' : 'user';
+            log(`切换到: ${camera}`);
+            
+            showMessage(`切换到${camera === 'user' ? '前置' : '后置'}摄像头`);
+            await startCamera();
+        }
+        
+        // 切换闪光灯
+        function toggleFlash() {
+            log('闪光灯按钮点击');
+            
+            if (!stream) {
+                showMessage('摄像头未启动');
+                return;
             }
-        });
-
-        // Handle before unload
-        window.addEventListener('beforeunload', function() {
-            if (isScanning) {
-                stopScanner();
+            
+            const videoTracks = stream.getVideoTracks();
+            if (videoTracks.length === 0) {
+                showMessage('没有视频轨道');
+                return;
             }
-        });
+            
+            const track = videoTracks[0];
+            const capabilities = track.getCapabilities();
+            
+            if (!capabilities.torch) {
+                showMessage('设备不支持闪光灯');
+                return;
+            }
+            
+            flash = !flash;
+            track.applyConstraints({ advanced: [{ torch: flash }] });
+            
+            showMessage(`闪光灯已${flash ? '开启' : '关闭'}`);
+            log(`闪光灯: ${flash}`);
+        }
+        
+        // 重拍
+        function retake() {
+            log('重拍按钮点击');
+            
+            preview.style.display = 'none';
+            capturedImage = null;
+            previewImage.src = '';
+            showMessage('重新拍照');
+        }
+        
+        // 保存
+        function save() {
+            log('保存按钮点击');
+            
+            if (!capturedImage) {
+                showMessage('没有可保存的照片');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.href = capturedImage;
+            link.download = 'camera_photo.jpg';
+            link.click();
+            
+            showMessage('照片已保存');
+            log('照片已保存');
+            
+            setTimeout(retake, 1500);
+        }
+        
+        // 页面加载完成后初始化
+        window.onload = function() {
+            log('页面加载完成');
+            
+            // 检查按钮元素
+            log('按钮检查:');
+            log('拍照按钮: ' + (captureBtn ? '存在' : '不存在'));
+            log('切换摄像头按钮: ' + (toggleCameraBtn ? '存在' : '不存在'));
+            log('闪光灯按钮: ' + (toggleFlashBtn ? '存在' : '不存在'));
+            
+            // 绑定事件监听器
+            captureBtn.onclick = capture;
+            toggleCameraBtn.onclick = toggleCamera;
+            toggleFlashBtn.onclick = toggleFlash;
+            retakeBtn.onclick = retake;
+            saveBtn.onclick = save;
+            
+            log('事件监听器已绑定');
+            
+            // 显示调试信息
+            debug.style.display = 'block';
+            
+            // 启动摄像头
+            startCamera();
+        };
+        
+        // 触摸事件支持
+        captureBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            capture();
+        };
+        
+        toggleCameraBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            toggleCamera();
+        };
+        
+        toggleFlashBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            toggleFlash();
+        };
+        
+        retakeBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            retake();
+        };
+        
+        saveBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            save();
+        };
+        
+        log('脚本开始执行');
     </script>
 </body>
 </html>
